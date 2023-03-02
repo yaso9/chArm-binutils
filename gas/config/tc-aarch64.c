@@ -468,6 +468,7 @@ get_reg_expected_msg (aarch64_reg_type reg_type)
 #define INSN_SIZE	4
 
 static htab_t aarch64_ops_hsh;
+static htab_t charm_ops_hsh;
 static htab_t aarch64_cond_hsh;
 static htab_t aarch64_shift_hsh;
 static htab_t aarch64_sys_regs_hsh;
@@ -477,6 +478,7 @@ static htab_t aarch64_sys_regs_dc_hsh;
 static htab_t aarch64_sys_regs_at_hsh;
 static htab_t aarch64_sys_regs_tlbi_hsh;
 static htab_t aarch64_sys_regs_sr_hsh;
+static htab_t charm_reg_hsh;
 static htab_t aarch64_reg_hsh;
 static htab_t aarch64_barrier_opt_hsh;
 static htab_t aarch64_nzcv_hsh;
@@ -736,6 +738,7 @@ parse_reg (char **ccp)
     p++;
   while (ISALPHA (*p) || ISDIGIT (*p) || *p == '_');
 
+  if (!str_hash_find_n (charm_reg_hsh, start, p - start)) return NULL;
   reg = (reg_entry *) str_hash_find_n (aarch64_reg_hsh, start, p - start);
 
   if (!reg)
@@ -5872,6 +5875,7 @@ lookup_mnemonic (const char *start, int len)
 {
   templates *templ = NULL;
 
+  if (!str_hash_find_n (charm_ops_hsh, start, len)) return NULL;
   templ = str_hash_find_n (aarch64_ops_hsh, start, len);
   return templ;
 }
@@ -8237,6 +8241,13 @@ aarch64_canonicalize_symbol_name (char *name)
 #define REGSET(p,t) \
   REGSET31(p,t), REGNUM(p,31,t)
 
+/* These go into charm_reg_hsh hash-table.  */
+static const reg_entry charm_reg_names[] = {
+  REGSET31 (x, R_64), REGSET31 (X, R_64),
+  REGDEF (sp, 31, SP_64), REGDEF (SP, 31, SP_64),
+  REGDEF (xzr, 31, Z_64), REGDEF (XZR, 31, Z_64),
+};
+
 /* These go into aarch64_reg_hsh hash-table.  */
 static const reg_entry reg_names[] = {
   /* Integer registers.  */
@@ -9614,6 +9625,17 @@ sysreg_hash_insert (htab_t table, const char *key, void *value)
   checked_hash_insert (table, key, value);
 }
 
+#define CHARM_INSNS_ALLOWED 1
+static void
+fill_charm_instructions_hash_table (void)
+{
+  static const char *allowed_insns[] = {"ldur", "stur", "movk", "movz", "adrp", "adds", "subs", "cmp", "mvn", "orr", "eor", "ands", "tst", "lsl", "lsr", "asr", "b", "b.c", "bl", "ret", "nop"};
+
+  for (size_t i = 0; i < sizeof(allowed_insns) / sizeof(char *); i++) {
+    checked_hash_insert (charm_ops_hsh, allowed_insns[i], (void *) CHARM_INSNS_ALLOWED);
+  }
+}
+
 static void
 fill_instruction_hash_table (void)
 {
@@ -9669,6 +9691,7 @@ md_begin (void)
   unsigned int i;
 
   aarch64_ops_hsh = str_htab_create ();
+  charm_ops_hsh = str_htab_create ();
   aarch64_cond_hsh = str_htab_create ();
   aarch64_shift_hsh = str_htab_create ();
   aarch64_sys_regs_hsh = str_htab_create ();
@@ -9678,12 +9701,14 @@ md_begin (void)
   aarch64_sys_regs_at_hsh = str_htab_create ();
   aarch64_sys_regs_tlbi_hsh = str_htab_create ();
   aarch64_sys_regs_sr_hsh = str_htab_create ();
+  charm_reg_hsh = str_htab_create ();
   aarch64_reg_hsh = str_htab_create ();
   aarch64_barrier_opt_hsh = str_htab_create ();
   aarch64_nzcv_hsh = str_htab_create ();
   aarch64_pldop_hsh = str_htab_create ();
   aarch64_hint_opt_hsh = str_htab_create ();
 
+  fill_charm_instructions_hash_table ();
   fill_instruction_hash_table ();
 
   for (i = 0; aarch64_sys_regs[i].name != NULL; ++i)
@@ -9723,6 +9748,11 @@ md_begin (void)
   for (i = 0; i < ARRAY_SIZE (reg_names); i++)
     checked_hash_insert (aarch64_reg_hsh, reg_names[i].name,
 			 (void *) (reg_names + i));
+
+#define CHARM_REG_ALLOWED 1
+  for (i = 0; i < ARRAY_SIZE (charm_reg_names); i++)
+    checked_hash_insert (charm_reg_hsh, charm_reg_names[i].name,
+			 (void *) CHARM_REG_ALLOWED);
 
   for (i = 0; i < ARRAY_SIZE (nzcv_names); i++)
     checked_hash_insert (aarch64_nzcv_hsh, nzcv_names[i].template,

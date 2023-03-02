@@ -23,7 +23,7 @@ This is a fork of GNU binutils that has the aarch64 target modified to only supp
 - RET
 - NOP
 
-Additionally, the Wn 32-bit registers are not supported.
+Additionally, only the Xn, XZR, and SP registers are supported.
 
 ## Compilation
 Run the following
